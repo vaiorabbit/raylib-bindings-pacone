@@ -113,7 +113,6 @@ class Dot
 
   def render
     return unless @active
-
     if @powerup
       DrawCircle(@pos.x + @radius * 0.5 - RADIUS_NORMAL, @pos.y - @radius * 0.25 + RADIUS_NORMAL, @radius, BEIGE)
     else
@@ -189,18 +188,16 @@ class Enemy
   end
 
   def run_ai(player_x:, stage_width:)
+    return unless @state == :Alive
     dist_r = player_x - @pos.x
     dist_r += stage_width if dist_r.negative?
     dist_l = @pos.x - player_x
     dist_l += stage_width if dist_l.negative?
-
-    if @state == :Alive
-      @dir = if panic?
-               dist_l <= dist_r ? Game::DIR_R : Game::DIR_L
-             else
-               dist_l <= dist_r ? Game::DIR_L : Game::DIR_R
-             end
-    end
+    @dir = if panic?
+             dist_l <= dist_r ? Game::DIR_R : Game::DIR_L
+           else
+             dist_l <= dist_r ? Game::DIR_L : Game::DIR_R
+           end
   end
 
   def update(dt)
@@ -334,12 +331,10 @@ class Player
     case @state
     when :Alive
       @pos.x += @dir * speed() * dt
-
       if @powerup_timer > 0.0
         @powerup_timer -= dt
         @powerup_timer = 0.0 if @powerup_timer < 0.0
       end
-
       @anim_mouse_open = @anim_mouse_timer <= ((1.0 / 60.0) * 4)
       @anim_mouse_timer += dt
       @anim_mouse_timer = 0.0 if @anim_mouse_timer >= ((1.0 / 60.0) * 8)
@@ -380,14 +375,14 @@ end
 ####################################################################################################
 
 if __FILE__ == $PROGRAM_NAME
+  # Load raylib
   shared_lib_path = Gem::Specification.find_by_name('raylib-bindings').full_gem_path + '/lib/'
-
   case RUBY_PLATFORM
-  when /mswin|msys|mingw/
+  when /mswin|msys|mingw/ # Windows
     Raylib.load_lib(shared_lib_path + 'libraylib.dll')
-  when /darwin/
+  when /darwin/ # macOS
     Raylib.load_lib(shared_lib_path + 'libraylib.dylib')
-  when /linux/
+  when /linux/ # Ubuntu Linux (x86_64 or aarch64)
     arch = RUBY_PLATFORM.split('-')[0]
     Raylib.load_lib(shared_lib_path + "libraylib.#{arch}.so")
   else
@@ -395,14 +390,15 @@ if __FILE__ == $PROGRAM_NAME
   end
 
   game = Game.new
-
-  SetTraceLogLevel(LOG_ERROR)
   config = game.configs[:stage_normal]
-  screen_width = config.screen_width
-  screen_height = config.screen_height
-  InitWindow(screen_width, screen_height, "Yet Another Ruby-raylib bindings : 1D dot eater")
+  screen_width, screen_height = config.screen_width, config.screen_height
+
+  # Start raylib
+  SetTraceLogLevel(LOG_ERROR)
+  InitWindow(screen_width, screen_height, 'Yet Another Ruby-raylib bindings : 1D dot eater')
   SetTargetFPS(60)
 
+  # Initialize objects
   stage_height = screen_height / 4
   stage = Stage.new(screen_width, stage_height)
   stage.offset.y = screen_height * 0.5
@@ -410,19 +406,19 @@ if __FILE__ == $PROGRAM_NAME
   player = Player.new
   enemy = Enemy.new
 
-  dot_count = config.dot_count
   dot_start_offset_x = 20.0
-  dot_interval = stage.width / dot_count.to_f
-  dots = Array.new(dot_count) { Dot.new }
+  dot_interval = stage.width / config.dot_count.to_f
+  dots = Array.new(config.dot_count) { Dot.new }
   dots.each_with_index do |dot, i|
     dot.pos.y = stage.offset.y
     dot.pos.x = dot_start_offset_x + i * dot_interval
   end
 
+  # Prepare reset functions as lambda for later use
   reset_dots = lambda {
     begin
       success = true
-      power_dot_index = rand(dot_count)
+      power_dot_index = rand(dots.length)
       dots.each_with_index do |dot, i|
         dot.reset(powerup_on: i == power_dot_index)
       end
@@ -436,22 +432,22 @@ if __FILE__ == $PROGRAM_NAME
     game.reset(keep_high_score: true)
 
     player.reset
-    player.pos.x = stage.center.x - stage.width * 0.333
-    player.pos.y = stage.offset.y
+    player.pos.set(stage.center.x - stage.width * 0.333, stage.offset.y)
 
     enemy.reset
-    enemy.pos.x = stage.center.x + stage.width * 0.333
-    enemy.pos.y = stage.offset.y
+    enemy.pos.set(stage.center.x + stage.width * 0.333, stage.offset.y)
 
     reset_dots.call
   }
   reset_game.call
 
   until WindowShouldClose()
+    # Press R to restart
     reset_game.call if IsKeyPressed(KEY_R)
 
     dt = GetFrameTime()
 
+    # Update objects
     game.update(dt)
 
     unless game.ready?
@@ -467,6 +463,7 @@ if __FILE__ == $PROGRAM_NAME
       end
 
       # Check collision
+      # player vs dots
       dots.each do |dot|
         unless dot.eaten?
           if CheckCollisionCircles(player.pos, player.hit_radius, dot.pos, dot.radius)
@@ -479,13 +476,13 @@ if __FILE__ == $PROGRAM_NAME
           end
         end
       end
-
+      # player vs enemy
       unless enemy.knockedout?
         if CheckCollisionCircles(player.pos, player.hit_radius, enemy.pos, enemy.hit_radius)
-          if player.powerup?
+          if player.powerup? # Allow player to eat enemy and get bonus
             enemy.knockout
             game.current_score += enemy.score
-          else
+          else # player is caught by enemy -> game over
             game.finish
             enemy.finish
             player.finish
@@ -501,32 +498,34 @@ if __FILE__ == $PROGRAM_NAME
     BeginDrawing()
       ClearBackground(BLACK)
 
+      # Render objects
       stage.render
       dots.each(&:render)
       player.render
       enemy.render
 
-      font_size = 35
+      # Render UI
+      # Event message
+      msg_font_size = 35
       if game.ready?
-        text_width = MeasureText("READY?", font_size)
+        text_width = MeasureText('READY?', msg_font_size)
         q = game.state_timer.divmod(0.1)[0]
-        DrawText("READY?", 0.5 * screen_width - text_width * 0.5, 70, font_size, Fade(RED, q % 2 == 0 ? 1.0 : 0.0))
-      end
-
-      if game.game_over?
+        DrawText('READY?', 0.5 * screen_width - text_width * 0.5, 70, msg_font_size, RED) if q % 2 == 0
+      elsif game.game_over?
         text_widths = [
-          MeasureText("GAME OVER", font_size),
-          MeasureText("Press R to restart", font_size)
+          MeasureText('GAME OVER', msg_font_size),
+          MeasureText('Press R to restart', msg_font_size)
         ]
-        DrawText("GAME OVER", 0.5 * screen_width - text_widths[0] * 0.5, 70, font_size, RED)
-        DrawText("Press R to restart", 0.5 * screen_width - text_widths[1] * 0.5, 100, font_size, RED)
+        DrawText('GAME OVER', 0.5 * screen_width - text_widths[0] * 0.5, 70, msg_font_size, RED)
+        DrawText('Press R to restart', 0.5 * screen_width - text_widths[1] * 0.5, 100, msg_font_size, RED)
       end
 
-      DrawText("1UP", 20, 10, 25, RED)
+      # Scores
+      DrawText('1UP', 20, 10, 25, RED)
       DrawText("#{game.current_score}", 20, 35, 25, WHITE)
 
       score_font_size = 25
-      hiscore_header = "HIGH SCORE"
+      hiscore_header = 'HIGH SCORE'
       hiscore_header_width = MeasureText(hiscore_header, score_font_size)
       hiscore_value = "%10d" % game.high_score
       hiscore_value_width = MeasureText(hiscore_value, score_font_size)
@@ -544,12 +543,11 @@ if __FILE__ == $PROGRAM_NAME
       help_msg_base_y = help_base_y + 10
       DrawRectangle(help_base_x, help_base_y, 280, 80, Fade(MAROON, 0.25))
       DrawRectangleLines(help_base_x, help_base_y, 280, 80, GRAY)
-      DrawText("Left/Right : move player", help_msg_x, help_msg_base_y + 0, 20, WHITE)
-      DrawText("R : restart game", help_msg_x, help_msg_base_y + 20, 20, WHITE)
-      DrawText("ESC : exit", help_msg_x, help_msg_base_y + 40, 20, WHITE)
+      DrawText('Left/Right : move player', help_msg_x, help_msg_base_y + 0, 20, WHITE)
+      DrawText('R : restart game', help_msg_x, help_msg_base_y + 20, 20, WHITE)
+      DrawText('ESC : exit', help_msg_x, help_msg_base_y + 40, 20, WHITE)
       # FPS
-      DrawFPS(screen_width - 100, 16)
-
+      # DrawFPS(screen_width - 100, 16)
     EndDrawing()
   end
 
