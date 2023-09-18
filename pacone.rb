@@ -254,7 +254,7 @@ class Enemy
     unless knockedout?
       body_color = panic? ? BLUE : RED
       # Body
-      DrawCircleSector(@pos, body_radius, 45, 315, 32, body_color)
+      DrawCircleSector(@pos, body_radius, 150, 390, 32, body_color)
       DrawRectangle(@pos.x - body_radius, @pos.y, body_radius * 2.0, leg_radius * 2, body_color)
       # Legs
       DrawCircle(@pos.x - body_radius + leg_radius, @pos.y + body_radius - leg_radius + leg_yofs, leg_radius, body_color)
@@ -362,9 +362,9 @@ class Player
                  end
     if @anim_mouse_open
       if @dir == Game::DIR_L
-        DrawCircleSector(@pos, radius, -60, 240, 36, body_color)
+        DrawCircleSector(@pos, radius, -150, 150, 36, body_color)
       else
-        DrawCircleSector(@pos, radius, 120, 420, 36, body_color)
+        DrawCircleSector(@pos, radius, 30, 330, 36, body_color)
       end
     else
       DrawCircle(@pos.x, @pos.y, radius, body_color)

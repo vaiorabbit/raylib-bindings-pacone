@@ -3,7 +3,7 @@
 # 1D dot eater : Ruby raylib bindings demo #
 
 *   Created : 2023-02-12
-*   Last modified : 2023-02-12
+*   Last modified : 2023-09-18
 
 <img src="https://raw.githubusercontent.com/vaiorabbit/raylib-bindings-pacone/main/doc/screenshot_00.png" width="800">
 <img src="https://raw.githubusercontent.com/vaiorabbit/raylib-bindings-pacone/main/doc/screenshot_01.png" width="800">
